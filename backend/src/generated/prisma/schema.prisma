@@ -1,0 +1,116 @@
+generator client {
+  provider = "prisma-client-js"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "mysql"
+}
+
+enum SessionStatus {
+  pending
+  running
+  completed
+  failed
+}
+
+enum AgentStatus {
+  pending
+  running
+  completed
+  failed
+}
+
+model User {
+  id               String            @id @default(uuid()) @db.VarChar(36)
+  name             String            @db.VarChar(255)
+  email            String            @unique @db.VarChar(191)
+  passwordHash     String            @map("password_hash") @db.VarChar(255)
+  createdAt        DateTime          @default(now()) @map("created_at")
+  researchSessions ResearchSession[]
+
+  @@map("users")
+}
+
+model ResearchSession {
+  id          String        @id @default(uuid()) @db.VarChar(36)
+  userId      String        @map("user_id") @db.VarChar(36)
+  topic       String        @db.Text
+  status      SessionStatus @default(pending)
+  totalTokens Int           @default(0) @map("total_tokens")
+  totalCost   Decimal       @default(0) @map("total_cost") @db.Decimal(18, 8)
+  totalSteps  Int           @default(0) @map("total_steps")
+  startedAt   DateTime      @default(now()) @map("started_at")
+  completedAt DateTime?     @map("completed_at")
+  user        User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  agents      Agent[]
+  report      Report?
+
+  @@index([userId])
+  @@index([status])
+  @@map("research_sessions")
+}
+
+model Agent {
+  id              String          @id @default(uuid()) @db.VarChar(36)
+  sessionId       String          @map("session_id") @db.VarChar(36)
+  agentName       String          @map("agent_name") @db.VarChar(191)
+  status          AgentStatus     @default(pending)
+  inputData       Json?           @map("input_data")
+  outputData      Json?           @map("output_data")
+  tokenUsage      Int             @default(0) @map("token_usage")
+  cost            Decimal         @default(0) @db.Decimal(18, 8)
+  executionTimeMs Int             @default(0) @map("execution_time_ms")
+  retries         Int             @default(0)
+  error           String?         @db.Text
+  createdAt       DateTime        @default(now()) @map("created_at")
+  session         ResearchSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  steps           AgentStep[]
+
+  @@index([sessionId])
+  @@index([agentName])
+  @@map("agents")
+}
+
+model AgentStep {
+  id               String   @id @default(uuid()) @db.VarChar(36)
+  agentId          String   @map("agent_id") @db.VarChar(36)
+  stepNumber       Int      @map("step_number")
+  toolName         String   @map("tool_name") @db.VarChar(255)
+  arguments        Json
+  response         Json?
+  promptTokens     Int      @default(0) @map("prompt_tokens")
+  completionTokens Int      @default(0) @map("completion_tokens")
+  cost             Decimal  @default(0) @db.Decimal(18, 8)
+  createdAt        DateTime @default(now()) @map("created_at")
+  agent            Agent    @relation(fields: [agentId], references: [id], onDelete: Cascade)
+
+  @@unique([agentId, stepNumber])
+  @@index([agentId])
+  @@map("agent_steps")
+}
+
+model Report {
+  id               String          @id @default(uuid()) @db.VarChar(36)
+  sessionId        String          @unique @map("session_id") @db.VarChar(36)
+  executiveSummary String          @map("executive_summary") @db.Text
+  keyFindings      Json            @map("key_findings")
+  detailedAnalysis String?         @map("detailed_analysis") @db.LongText
+  references       Json
+  conclusion       String          @db.Text
+  createdAt        DateTime        @default(now()) @map("created_at")
+  session          ResearchSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@map("reports")
+}
+
+model ModelPricing {
+  id                   String   @id @default(uuid()) @db.VarChar(36)
+  modelName            String   @unique @map("model_name") @db.VarChar(191)
+  inputCostPerMillion  Decimal  @map("input_cost_per_million") @db.Decimal(18, 8)
+  outputCostPerMillion Decimal  @map("output_cost_per_million") @db.Decimal(18, 8)
+  createdAt            DateTime @default(now()) @map("created_at")
+  updatedAt            DateTime @updatedAt @map("updated_at")
+
+  @@map("model_pricing")
+}
